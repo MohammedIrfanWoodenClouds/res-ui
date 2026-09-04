@@ -1,2 +1,2 @@
-# SPA fallback for Render / static hosts
+# Kept for Netlify-style hosts; Render uses render.yaml / dashboard rewrites
 /*    /index.html   200
