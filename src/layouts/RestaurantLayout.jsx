@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Brand, Icon } from '../components/ui';
 import { useEffect, useState } from 'react';
 import client from '../api/client';
+import NewOrderWatcher from '../components/NewOrderWatcher';
 
 const links = [
   ['Dashboard', '/app', 'dashboard', true],
@@ -31,6 +32,7 @@ export default function RestaurantLayout() {
 
   return (
     <div className="min-h-screen flex bg-[var(--rb-bg)]">
+      <NewOrderWatcher />
       <aside className="hidden md:flex w-60 flex-col bg-[var(--rb-navy)] text-white p-4">
         <div className="px-2 mb-8">
           <Brand light />

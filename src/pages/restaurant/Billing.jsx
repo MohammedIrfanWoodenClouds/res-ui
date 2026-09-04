@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react';
 import client from '../../api/client';
 import { money } from '../../utils/format';
 import { PageHeader, StatusBadge } from '../../components/ui';
+import InvoiceThermalSlip, { printInvoiceSlip } from '../../components/InvoiceThermalSlip';
+import { useToast } from '../../components/Toast';
 
 export default function Billing() {
+  const { push } = useToast();
   const [ready, setReady] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [printData, setPrintData] = useState(null);
   const [method, setMethod] = useState('Cash');
+  const [busy, setBusy] = useState(false);
 
   const load = async () => {
     const [orders, inv] = await Promise.all([
@@ -23,9 +27,24 @@ export default function Billing() {
   }, []);
 
   const bill = async (orderId) => {
-    const r = await client.post(`/invoices/bill/${orderId}`, { paymentMethod: method });
-    setPrintData(r.data);
-    await load();
+    setBusy(true);
+    try {
+      const r = await client.post(`/invoices/bill/${orderId}`, { paymentMethod: method });
+      setPrintData(r.data);
+      await load();
+      await printInvoiceSlip();
+      push(`Invoice ${r.data.invoice.invoiceNumber} · ${money(r.data.invoice.total)}`, {
+        title: 'Bill printed',
+        type: 'success',
+      });
+    } catch (e) {
+      push(e.response?.data?.message || 'Billing failed', {
+        title: 'Error',
+        type: 'warning',
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const openInvoice = async (id) => {
@@ -33,11 +52,16 @@ export default function Billing() {
     setPrintData(r.data);
   };
 
+  const reprint = async () => {
+    if (!printData) return;
+    await printInvoiceSlip();
+  };
+
   return (
     <div>
-      <PageHeader title="Billing" subtitle="Create invoices and print bills" />
+      <PageHeader title="Billing" subtitle="Create thermal invoices and print bills" />
 
-      <div className="card p-5 mb-4">
+      <div className="card p-5 mb-4 no-print">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <h3 className="font-semibold">Ready to bill</h3>
           <div className="flex items-center gap-2">
@@ -52,15 +76,18 @@ export default function Billing() {
         {ready.length === 0 && <p className="text-slate-400 text-sm">No READY orders</p>}
         <div className="space-y-2">
           {ready.map((o) => (
-            <div key={o._id} className="flex justify-between items-center border border-[var(--rb-border)] rounded-xl p-3">
+            <div
+              key={o._id}
+              className="flex justify-between items-center border border-[var(--rb-border)] rounded-xl p-3"
+            >
               <div>
                 <div className="font-semibold">#{o.orderNumber}</div>
                 <div className="text-sm text-slate-500">
                   {o.orderType === 'DINE_IN' ? `Table ${o.tableName}` : 'Takeaway'} · {money(o.total)}
                 </div>
               </div>
-              <button className="btn btn-primary" onClick={() => bill(o._id)}>
-                Create Invoice
+              <button className="btn btn-primary" disabled={busy} onClick={() => bill(o._id)}>
+                {busy ? 'Printing…' : 'Bill & Print'}
               </button>
             </div>
           ))}
@@ -68,7 +95,7 @@ export default function Billing() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
-        <div className="card table-wrap">
+        <div className="card table-wrap no-print">
           <div className="px-4 py-3 border-b border-[var(--rb-border)] font-semibold">Recent Invoices</div>
           <table className="table">
             <thead>
@@ -90,7 +117,10 @@ export default function Billing() {
                   <td>{money(i.total)}</td>
                   <td>{i.paymentMethod}</td>
                   <td>
-                    <button className="text-[var(--rb-blue)] text-sm font-medium" onClick={() => openInvoice(i._id)}>
+                    <button
+                      className="text-[var(--rb-blue)] text-sm font-medium"
+                      onClick={() => openInvoice(i._id)}
+                    >
                       View
                     </button>
                   </td>
@@ -101,15 +131,11 @@ export default function Billing() {
         </div>
 
         {printData && (
-          <div className="card p-6" id="invoice-print">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-xl font-bold">{printData.restaurant?.name}</h3>
-                <p className="text-sm text-slate-500">{printData.restaurant?.address}</p>
-                <p className="text-sm text-slate-500">{printData.restaurant?.phone}</p>
-              </div>
-              <div className="no-print flex gap-2">
-                <button className="btn btn-secondary" onClick={() => window.print()}>
+          <div className="card p-4">
+            <div className="no-print flex justify-between items-center mb-3">
+              <h3 className="font-semibold">Thermal invoice preview</h3>
+              <div className="flex gap-2">
+                <button className="btn btn-secondary" onClick={reprint}>
                   Print
                 </button>
                 <button className="btn btn-primary" onClick={() => setPrintData(null)}>
@@ -117,38 +143,12 @@ export default function Billing() {
                 </button>
               </div>
             </div>
-            <div className="font-bold mb-1">INVOICE #{printData.invoice.invoiceNumber}</div>
-            <div className="text-sm text-slate-500 mb-4">
-              {new Date(printData.invoice.createdAt).toLocaleString()} · {printData.invoice.orderType}
-              {printData.invoice.tableName ? ` · Table ${printData.invoice.tableName}` : ''}
-            </div>
-            <table className="table mb-4">
-              <tbody>
-                {printData.invoice.lines.map((l, idx) => (
-                  <tr key={idx}>
-                    <td>{l.itemName}</td>
-                    <td className="text-right">
-                      {l.quantity} × {l.unitPrice}
-                    </td>
-                    <td className="text-right font-medium">{money(l.lineTotal)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="text-sm space-y-1">
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span>{money(printData.invoice.subtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Tax</span>
-                <span>{money(printData.invoice.taxTotal)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-lg pt-2 border-t border-[var(--rb-border)]">
-                <span>TOTAL</span>
-                <span>{money(printData.invoice.total)}</span>
-              </div>
-              <div className="pt-2">Payment: {printData.invoice.paymentMethod}</div>
+            <div className="flex justify-center bg-slate-100 rounded-xl p-4 no-print-bg">
+              <InvoiceThermalSlip
+                restaurant={printData.restaurant}
+                invoice={printData.invoice}
+                payment={printData.payment}
+              />
             </div>
           </div>
         )}

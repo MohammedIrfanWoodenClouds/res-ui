@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react';
 import client from '../../api/client';
 import { money } from '../../utils/format';
 import { PageHeader, StatusBadge } from '../../components/ui';
+import KotThermalSlip, { printKotSlip } from '../../components/KotThermalSlip';
+import { useToast } from '../../components/Toast';
 
 const NEXT = {
-  NEW: [
-    { status: 'CONFIRMED', label: 'Confirm', className: 'btn btn-primary' },
-    { status: 'CANCELLED', label: 'Cancel', className: 'btn btn-danger' },
-  ],
+  NEW: [{ status: 'CANCELLED', label: 'Cancel', className: 'btn btn-danger' }],
   CONFIRMED: [
     { status: 'PREPARING', label: 'Start Preparing', className: 'btn btn-warning' },
     { status: 'CANCELLED', label: 'Cancel', className: 'btn btn-danger' },
@@ -22,8 +21,12 @@ const NEXT = {
 };
 
 export default function Orders() {
+  const { push } = useToast();
   const [orders, setOrders] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [restaurant, setRestaurant] = useState(null);
+  const [printPayload, setPrintPayload] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   const load = async () => {
     const r = await client.get('/orders');
@@ -32,6 +35,10 @@ export default function Orders() {
 
   useEffect(() => {
     load().catch(() => {});
+    client
+      .get('/menu/profile')
+      .then((r) => setRestaurant(r.data))
+      .catch(() => {});
   }, []);
 
   const open = async (id) => {
@@ -47,9 +54,66 @@ export default function Orders() {
     if (selected?.order?._id === id) await open(id);
   };
 
+  const runThermalPrint = async (bundle) => {
+    setPrintPayload({
+      order: bundle.order,
+      items: bundle.items,
+      kot: bundle.kot,
+    });
+    await printKotSlip();
+  };
+
+  const sendKot = async (orderId) => {
+    setBusy(true);
+    try {
+      let bundle = selected?.order?._id === orderId ? selected : null;
+      if (!bundle || bundle.order.status === 'NEW') {
+        const r = await client.put(`/orders/${orderId}/status`, { status: 'CONFIRMED' });
+        bundle = r.data;
+      } else if (!bundle.kot && bundle.order.kotId) {
+        const r = await client.get(`/orders/${orderId}`);
+        bundle = r.data;
+      }
+      await load();
+      setSelected(bundle);
+      await runThermalPrint(bundle);
+      push(`KOT #${bundle.kot?.kotNumber || '—'} sent to kitchen`, {
+        title: 'KOT sent',
+        type: 'success',
+      });
+    } catch (e) {
+      push(e.response?.data?.message || 'Failed to send KOT', {
+        title: 'KOT failed',
+        type: 'warning',
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reprintKot = async () => {
+    if (!selected?.order) return;
+    setBusy(true);
+    try {
+      let bundle = selected;
+      if (!bundle.kot) {
+        const r = await client.get(`/orders/${selected.order._id}`);
+        bundle = r.data;
+        setSelected(bundle);
+      }
+      if (!bundle.kot) {
+        push('No KOT for this order yet. Use Send KOT first.', { type: 'warning' });
+        return;
+      }
+      await runThermalPrint(bundle);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
-      <PageHeader title="Orders" subtitle="Track and update order status" />
+      <PageHeader title="Orders" subtitle="Confirm orders, send KOT, and track kitchen status" />
       <div className="grid lg:grid-cols-2 gap-4">
         <div className="card table-wrap">
           <table className="table">
@@ -59,6 +123,7 @@ export default function Orders() {
                 <th>Type</th>
                 <th>Status</th>
                 <th>Total</th>
+                <th className="no-print" />
               </tr>
             </thead>
             <tbody>
@@ -74,13 +139,24 @@ export default function Orders() {
                     <StatusBadge label={o.status} />
                   </td>
                   <td>{money(o.total)}</td>
+                  <td className="no-print" onClick={(e) => e.stopPropagation()}>
+                    {o.status === 'NEW' && (
+                      <button
+                        className="btn btn-primary text-xs py-1 px-2"
+                        disabled={busy}
+                        onClick={() => sendKot(o._id)}
+                      >
+                        Send KOT
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        <div className="card p-5">
+        <div className="card p-5 no-print">
           {!selected ? (
             <p className="text-slate-400">Select an order to view details</p>
           ) : (
@@ -91,6 +167,7 @@ export default function Orders() {
                   <p className="text-sm text-slate-500 mt-1">
                     {selected.order.orderType}
                     {selected.order.tableName ? ` · Table ${selected.order.tableName}` : ''}
+                    {selected.kot ? ` · KOT #${selected.kot.kotNumber}` : ''}
                   </p>
                 </div>
                 <StatusBadge label={selected.order.status} />
@@ -115,6 +192,20 @@ export default function Orders() {
               </ul>
               <div className="mt-4 text-right text-lg font-bold">{money(selected.order.total)}</div>
               <div className="mt-4 flex flex-wrap gap-2">
+                {selected.order.status === 'NEW' && (
+                  <button
+                    className="btn btn-primary"
+                    disabled={busy}
+                    onClick={() => sendKot(selected.order._id)}
+                  >
+                    {busy ? 'Sending…' : 'Send KOT'}
+                  </button>
+                )}
+                {selected.kot && (
+                  <button className="btn btn-secondary" disabled={busy} onClick={reprintKot}>
+                    Print KOT
+                  </button>
+                )}
                 {(NEXT[selected.order.status] || []).map((a) => (
                   <button
                     key={a.status}
@@ -132,6 +223,15 @@ export default function Orders() {
           )}
         </div>
       </div>
+
+      {printPayload && (
+        <KotThermalSlip
+          restaurant={restaurant}
+          order={printPayload.order}
+          items={printPayload.items}
+          kot={printPayload.kot}
+        />
+      )}
     </div>
   );
 }

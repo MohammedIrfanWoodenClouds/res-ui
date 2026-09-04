@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { money, mediaUrl } from '../../utils/format';
+import { useToast } from '../../components/Toast';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'https://res-api.13.232.129.80.nip.io/api',
@@ -9,6 +10,7 @@ const api = axios.create({
 
 export default function PublicMenu() {
   const { slug } = useParams();
+  const { push } = useToast();
   const [data, setData] = useState(null);
   const [cart, setCart] = useState({});
   const [search, setSearch] = useState('');
@@ -91,8 +93,18 @@ export default function PublicMenu() {
       setPlaced(r.data);
       setCart({});
       setShowCart(false);
+      push(`Order #${r.data.order.orderNumber} · ${money(r.data.order.total)}`, {
+        title: 'Order placed successfully',
+        type: 'success',
+        duration: 5000,
+      });
     } catch (e) {
       setError(e.response?.data?.message || 'Could not place order');
+      push(e.response?.data?.message || 'Could not place order', {
+        title: 'Order failed',
+        type: 'warning',
+        duration: 5000,
+      });
     } finally {
       setBusy(false);
     }
