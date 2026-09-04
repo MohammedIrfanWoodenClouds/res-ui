@@ -243,15 +243,28 @@ export function SearchInput({ value, onChange, placeholder = 'Search...' }) {
   );
 }
 
-export function Brand({ light = false }) {
+export function Brand({ light = false, full = false }) {
+  if (full) {
+    return (
+      <img
+        src="/logo-full.png"
+        alt="RestoPilot"
+        className="object-contain"
+        style={{ height: 88, width: 'auto', maxWidth: 240 }}
+      />
+    );
+  }
+
   return (
-    <div className={`flex items-center gap-2 font-bold text-lg ${light ? 'text-white' : 'text-[var(--rb-navy)]'}`}>
-      <span
-        className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${light ? 'bg-blue-500' : 'bg-[var(--rb-blue)]'} text-white`}
-      >
-        <Icon name="utensils" size={18} />
+    <div className="flex items-center gap-2.5">
+      <img
+        src="/logo-icon.png"
+        alt=""
+        className="h-10 w-10 object-contain shrink-0 drop-shadow-sm"
+      />
+      <span className={`font-bold text-lg tracking-tight ${light ? 'text-white' : 'text-[var(--rb-navy)]'}`}>
+        Resto<span className={light ? 'text-sky-300' : 'text-[var(--rb-blue)]'}>Pilot</span>
       </span>
-      RestoBill
     </div>
   );
 }
