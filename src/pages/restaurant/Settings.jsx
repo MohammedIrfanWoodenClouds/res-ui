@@ -18,7 +18,7 @@ export default function Settings() {
     setProfile(p.data);
     setForm({ name: p.data.name || '', phone: p.data.phone || '', address: p.data.address || '' });
     setTables(t.data);
-    const publicUrl = `${import.meta.env.VITE_PUBLIC_URL || 'http://localhost:5173'}/menu/${p.data.slug}`;
+    const publicUrl = `${import.meta.env.VITE_PUBLIC_URL || 'https://restopilot-zwoo.onrender.com'}/menu/${p.data.slug}`;
     setQr(await QRCode.toDataURL(publicUrl, { width: 220, margin: 1 }));
   };
 
@@ -49,7 +49,7 @@ export default function Settings() {
   };
 
   const menuUrl = profile
-    ? `${import.meta.env.VITE_PUBLIC_URL || 'http://localhost:5173'}/menu/${profile.slug}`
+    ? `${import.meta.env.VITE_PUBLIC_URL || 'https://restopilot-zwoo.onrender.com'}/menu/${profile.slug}`
     : '';
 
   return (

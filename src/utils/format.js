@@ -4,7 +4,7 @@ export function money(n) {
 }
 
 export function apiOrigin() {
-  const base = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const base = import.meta.env.VITE_API_URL || 'https://res-api.13.232.129.80.nip.io/api';
   return base.replace(/\/api\/?$/, '');
 }
 

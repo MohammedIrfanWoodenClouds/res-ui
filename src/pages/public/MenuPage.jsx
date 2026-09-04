@@ -4,7 +4,7 @@ import axios from 'axios';
 import { money, mediaUrl } from '../../utils/format';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://res-api.13.232.129.80.nip.io/api',
 });
 
 export default function PublicMenu() {
